@@ -1,0 +1,458 @@
+---
+title: "Kalokerinos Dataset 5" 
+author: 
+params:
+  file: "Dataset 5 public.csv"
+output:
+  html_document: 
+    toc: yes
+    number_sections: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+# Data Preparation
+```{r,include=FALSE}
+setwd("/home/sc.uni-leipzig.de/no628luhi/rstudio01/Neu")
+```
+
+
+```{r}
+dataset <- read.csv(file = params$file, header = T, sep = ",")
+getwd()
+#run parallel cores 
+options(mc.cores = 8, brms.backend = "cmdstanr", brms.file_refit = "on_change")
+#install.packages("loo")
+#remotes::install_github("stan-dev/loo")
+library(remotes)
+library(loo)
+library(psych)
+library(relativeVariability)
+library(brms)
+library(cmdstanr)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(haven)
+#library(rstanarm)
+library(knitr)
+library(rstan)
+library(shinystan)
+```
+
+
+## Rescale Data
+```{r}
+dataset$negemo_full_m <- (dataset$negemo_full_m -1)*(4/6)+1
+dataset$posemo_full_m <- (dataset$posemo_full_m -1)*(4/6)+1
+
+dataset$neuro_t <- (dataset$neuro_t -1)*(4/6)+1
+
+hist(dataset$negemo_full_m)
+```
+## Censoring Data
+
+```{r}
+range(dataset$negemo_full_m, na.rm = T)
+range(dataset$posemo_full_m, na.rm = T)
+sd(dataset$negemo_full_m, na.rm = T)
+mean(dataset$negemo_full_m, na.rm = T)
+
+sd(dataset$posemo_full_m, na.rm = T)
+mean(dataset$posemo_full_m, na.rm = T)
+
+sd(dataset$neuro_t, na.rm = T)
+mean(dataset$neuro_t, na.rm = T)
+
+qplot(dataset$negemo_full_, binwidth = .1)
+qplot(dataset$posemo_full_, binwidth = .1)
+
+
+dataset$Acens <- case_when(dataset$negemo_full_m == 1 ~ "left",
+                         dataset$negemo_full_m == 5 ~ "right",
+                         TRUE ~ "none")
+table(dataset$Acens)
+
+dataset$Acens_p <- case_when(dataset$posemo_full_m == 1 ~ "left",
+                         dataset$posemo_full_m == 5 ~ "right",
+                         TRUE ~ "none")
+table(dataset$Acens_p)
+```
+
+# Negative Affect
+
+```{r message=TRUE, warning=TRUE}
+
+Kn_model_neuro3 <- brm(bf(negemo_full_m | cens(Acens) ~ neuro_t + (1|person_id),
+                       sigma ~ neuro_t+ (1|person_id)), data = dataset,
+                       iter = 7000, warmup = 2000,  chains = 4,
+                       control = list(adapt_delta = .99), init = 0.1,
+                       file = paste("models/", params$file, "Kn_model_neuro3"))
+print(Kn_model_neuro3)
+plot(Kn_model_neuro3)
+pp_check(Kn_model_neuro3)
+
+prior_summary(Kn_model_neuro3)
+
+```
+
+## Loo model comparison 
+
+```{r}
+Kn_model_neuro2 <- brm(negemo_full_m | cens(Acens) ~ neuro_t + (1|person_id), data = dataset,
+                    iter = 6000, warmup = 2000,  chains = 4,
+                    control = list(adapt_delta = .98), inits = 0.1 ,
+                    file = paste("models/", params$file, "Kn_model_neuro2"))
+
+print(Kn_model_neuro2)
+
+
+modelA <- Kn_model_neuro2
+modelB <- Kn_model_neuro3
+
+modelA <- add_criterion(modelA, "loo")
+modelB <- add_criterion(modelB, "loo")
+
+loo <- loo_compare(modelA,modelB, criterion = "loo")
+
+loo <- as.data.frame(loo)
+
+loo$Dataset <- params$file
+loo <- tibble::rownames_to_column(loo, "model")
+library("writexl")
+write_xlsx(loo,paste0("loo", params$file, ".xlsx"))
+```
+
+## control for gender 
+```{r message=TRUE, warning=TRUE}
+
+dataset$gender <- as.factor(dataset$gender)
+
+Kn_model_sex <- brm(bf(negemo_full_m | cens(Acens) ~ neuro_t + gender + (1|person_id),
+                       sigma ~ neuro_t + gender), data = dataset,
+                       iter = 9000, warmup = 2000, chains = 8,
+                       control = list(adapt_delta = .99), inits = 0.1,
+                    file = paste("models/", params$file, "Kn_model_sex"))
+print(Kn_model_sex)
+pp_check(Kn_model_sex)
+
+plot(Kn_model_sex)
+
+```
+
+# Positive Affect
+
+```{r message=TRUE, warning=TRUE}
+Kp_model_neuro3 <- brm(bf(posemo_full_m | cens(Acens_p) ~ neuro_t + (1|person_id),
+                       sigma ~ neuro_t + (1|person_id)), data = dataset,
+                       chains = 4,
+                       control = list(adapt_delta = .95), inits = 0.1,
+                       iter = 7000, warmup = 2000,
+                    file = paste("models/", params$file, "Kp_model_neuro3"))
+print(Kp_model_neuro3)
+pp_check(Kp_model_neuro3)
+
+
+plot(Kp_model_neuro3)
+prior_summary(Kp_model_neuro3)
+
+```
+
+## Loo model comparison 
+
+```{r}
+Kp_model_neuro2 <- brm(posemo_full_m | cens(Acens_p) ~ neuro_t + (1|person_id), data = dataset,
+                    iter = 7000, warmup = 2000, chains = 4,
+                   control = list(adapt_delta = .95), inits = 0.1,
+                    file = paste("models/", params$file, "Kp_model_neuro2"))
+print(Kp_model_neuro2)
+
+modelAp <- Kp_model_neuro2
+modelBp <- Kp_model_neuro3
+
+
+modelAp <- add_criterion(modelAp, "loo")
+modelBp <- add_criterion(modelBp, "loo")
+
+looP <- loo_compare(modelAp,modelBp, criterion = "loo")
+
+looP <- as.data.frame(looP)
+
+looP$Dataset <- params$file
+looP <- tibble::rownames_to_column(looP, "model")
+library("writexl")
+write_xlsx(looP,paste0("looP", params$file, ".xlsx"))
+
+```
+
+
+# Results
+
+```{r}
+extract_param <- function(model, parameter) {
+  ci <- posterior_summary(model, variable = parameter)
+  est <- sprintf("%.2f %.2f [%.2f;%.2f]", ci[,"Estimate"],ci[,"Est.Error"], ci[,"Q2.5"], ci[,"Q97.5"])
+  est
+}
+
+results_K <- data.frame(matrix(nrow = 7, # Modelle & RVI 
+                             ncol = 8+1)) # 2 Affekte a 3 Spalten 
+names(results_K) <- c("model", "negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma", "b_neg_sigma_sex",
+                    "posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma", "b_pos_sigma_sex"
+                    )
+
+results_K$model <- c("model1", "model2", "model3",
+                  "RSD", "RSD_weight", "SD", "gender")
+
+#NA
+
+results_K[2, "negemo_b_neuro"] <- extract_param(Kn_model_neuro2, "b_neuro_t")
+results_K[2, "negemo_sigma"] <- extract_param(Kn_model_neuro2, "sigma")
+
+results_K[3, "negemo_b_neuro"] <- extract_param(Kn_model_neuro3, "b_neuro_t")
+results_K[3, "negemo_b_neuro_sigma"] <- extract_param(Kn_model_neuro3, "b_sigma_neuro_t")
+results_K[3, "negemo_sigma"] <- extract_param(Kn_model_neuro3, "b_sigma_Intercept")
+
+#gender 
+
+results_K[7, "negemo_b_neuro"] <- extract_param(Kn_model_sex, "b_neuro_t")
+results_K[7, "negemo_b_neuro_sigma"] <- extract_param(Kn_model_sex, "b_sigma_neuro_t")
+results_K[7, "negemo_sigma"] <- extract_param(Kn_model_sex, "b_sigma_Intercept")
+results_K[7, "b_neg_sigma_sex"] <- extract_param(Kn_model_sex, "b_sigma_gender1")
+
+#pa
+results_K[2, "posemo_b_neuro"] <- extract_param(Kp_model_neuro2, "b_neuro_t")
+results_K[2, "posemo_sigma"] <- extract_param(Kp_model_neuro2, "sigma")
+
+results_K[3, "posemo_b_neuro"] <- extract_param(Kp_model_neuro3, "b_neuro_t")
+results_K[3, "posemo_b_neuro_sigma"] <- extract_param(Kp_model_neuro3, "b_sigma_neuro_t")
+results_K[3, "posemo_sigma"] <- extract_param(Kp_model_neuro3, "b_sigma_Intercept")
+
+
+```
+
+# RVI (Relative Variability Index)
+
+```{r message=TRUE, warning=TRUE}
+data_w <- unique(dataset[,2:5])
+```
+
+## Unweighted RVI
+
+```{r message=TRUE, warning=TRUE}
+data_w$RSD_NA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$RSD_NA[i] <- relativeSD(dataset$negemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                     1, 5)
+    }
+
+range(data_w$RSD_NA, na.rm = T)
+mean(data_w$RSD_NA, na.rm = T)
+sd(data_w$RSD_NA, na.rm = T)
+
+data_w$logrsd_n <- log(data_w$RSD_NA)
+
+plot(data_w$logrsd_n)
+
+m_rvi_na <- brm(logrsd_n ~ neuro_t, data= data_w)
+print(m_rvi_na)
+results_K[4,3] <- extract_param(m_rvi_na, "b_neuro_t")
+
+
+
+data_w$RSD_PA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$RSD_PA[i] <- relativeSD(dataset$posemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                     1, 5)
+}
+
+range(data_w$RSD_PA)
+
+data_w$logrsd_p <- log(data_w$RSD_PA)
+
+
+m_rvi_pa <- brm(logrsd_p ~ neuro_t, data= data_w)
+print(m_rvi_pa)
+
+results_K[4,6] <- extract_param(m_rvi_pa, "b_neuro_t")
+
+```
+
+
+## Weighted RVI
+
+```{r message=TRUE, warning=TRUE}
+data_w$mean_NA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$mean_NA[i] <- mean(dataset$negemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                   na.rm = T)
+    }
+
+mean(data_w$mean_NA)
+sd(data_w$mean_NA)
+
+
+data_w$mean_PA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$mean_PA[i] <- mean(dataset$posemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                   na.rm = T)
+}
+
+mean(data_w$mean_PA)
+sd(data_w$mean_PA)
+```
+
+
+```{r message=TRUE, warning=TRUE}
+
+data_w$weight_NA <- NA
+for (i in 1:nrow(data_w)) {
+    if (!is.na(data_w$mean_NA[i])) {
+      data_w$weight_NA[i] <- maximumSD(data_w$mean_NA[i], # Mittelwert
+                                       1,  # Minimum
+                                       5,  # Maximum
+                                       sum(!is.na(dataset$negemo_full_m[dataset$person_id == data_w$person_id[i]])) 
+      ) 
+      # W as reported in paper
+      data_w$weight_NA[i] <- data_w$weight_NA[i]^2
+    }
+  }
+
+mean(data_w$weight_NA)
+sd(data_w$weight_NA)
+range(data_w$weight_NA)
+
+m_rvi_na_w <- brm(logrsd_n| weights(weight_NA) ~ neuro_t, data= data_w,
+                    file = paste("models/", params$file, "Kn_model_logrsd"))
+print(m_rvi_na_w)
+results_K[5,3] <- extract_param(m_rvi_na_w, "b_neuro_t")
+
+
+
+data_w$weight_PA <- NA
+for (i in 1:nrow(data_w)) {
+    if (!is.na(data_w$mean_PA[i])) {
+      data_w$weight_PA[i] <- maximumSD(data_w$mean_PA[i], # Mittelwert
+                                       1,  # Minimum
+                                       5,  # Maximum
+                                       sum(!is.na(dataset$posemo_full_m[dataset$person_id == data_w$person_id[i]])) 
+      ) 
+      # W as reported in paper
+      data_w$weight_PA[i] <- data_w$weight_PA[i]^2
+    }
+  }
+
+m_rvi_pa_w <- brm(logrsd_p| weights(weight_PA) ~ neuro_t, data= data_w,
+                    file = paste("models/", params$file, "Kp_model_logrsd"))
+print(m_rvi_pa_w)
+results_K[5,6] <- extract_param(m_rvi_pa_w, "b_neuro_t")
+
+```
+
+# SD
+
+```{r message=TRUE, warning=TRUE}
+data_w$sd_NA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$sd_NA[i] <- sd(dataset$negemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                   na.rm = T)
+    }
+
+data_w$sd_PA <- NA
+for (i in 1:nrow(data_w)) {
+      data_w$sd_PA[i] <- sd(dataset$posemo_full_m[dataset$person_id == data_w$person_id[i]],
+                                   na.rm = T)
+    }
+
+mean(data_w$sd_NA)
+mean(data_w$sd_PA)
+data_w$sd_PA[data_w$sd_PA == 0] <- NA   
+data_w$sd_NA[data_w$sd_NA == 0] <- NA   
+
+
+data_w$logsd_NA <- log(data_w$sd_NA)
+data_w$logsd_PA <- log(data_w$sd_PA)
+```
+
+
+```{r message=TRUE, warning=TRUE}
+m_sd_na <- brm(logsd_NA ~ neuro_t, data= data_w,
+                    file = paste("models/", params$file, "Kn_model_logsd"))
+m_sd_na
+
+results_K[6,3] <- extract_param(m_sd_na, "b_neuro_t")
+
+m_sd_pa <- brm(logsd_PA ~ neuro_t, data= data_w,
+                    file = paste("models/", params$file, "Kp_model_logsd"))
+m_sd_pa
+results_K[6,6] <- extract_param(m_sd_pa, "b_neuro_t")
+```
+
+
+#Print Results
+
+```{r message=TRUE, warning=TRUE}
+library("writexl")
+
+write_xlsx(results_K,paste0("", params$file, ".xlsx"))
+         
+```
+
+
+# Incremental Validity of SD 
+
+```{r message=TRUE, warning=TRUE}
+na_noneurot <- brm(bf(negemo_full_m | cens(Acens) ~  (1|person_id),
+                       sigma ~ (1|person_id)), data = dataset,
+                       iter = 7000, warmup = 2000,chains = 4,
+                      control = list(adapt_delta = .99), init = 0.1,
+                   file = "na_noneurot")
+
+print(na_noneurot)
+
+rans <- coef(na_noneurot, summary = T)
+
+
+rans_i <- as.data.frame(rans$person_id[,,"Intercept"]) %>% tibble::rownames_to_column("person_id")
+rans_s <- as.data.frame(rans$person_id[,,"sigma_Intercept"]) %>% tibble::rownames_to_column("person_id")
+nrow(rans_s)
+nrow(rans_i)
+nrow(data_w)
+dat <- merge(rans_s, rans_i, all = T, by= "person_id")
+dat <- merge(dat, data_w, all = T, by= "person_id")
+
+names(dat)[2] <- "Est.SD"
+names(dat)[6] <- "Est.M"
+
+fit1 <- lm(neuro_t ~ Est.SD + Est.M , data=dat)
+summary(fit1)
+
+fit1.2 <- lm(neuro_t ~  Est.M , data=dat)
+summary(fit1.2)
+
+aov <- anova(fit1.2, fit1)
+aov
+
+summary(fit1)$r.squared-summary(fit1.2)$r.squared
+
+results_SDin <- data.frame(matrix(nrow = 1, ncol = 9))
+names(results_SDin) <- c("Dataset","b_SD","Err.SD","p(b_SD)","b_M","Err.M","p(b_M)","ΔR²", "p")
+
+results_SDin$Dataset <- params$file
+
+results_SDin$`ΔR²` <- summary(fit1)$r.squared-summary(fit1.2)$r.squared
+results_SDin$`p` <- aov$`Pr(>F)`[2]
+results_SDin$Err.SD <- summary(fit1)$coefficients[2,2]
+results_SDin$b_SD <- fit1$coefficients[2]
+
+results_SDin$`p(b_SD)` <- summary(fit1)$coefficients[2,4]
+results_SDin$b_M <- fit1$coefficients[3]
+results_SDin$`p(b_M)` <- summary(fit1)$coefficients[3,4]
+results_SDin$Err.M <- summary(fit1)$coefficients[3,2]
+
+  
+library("writexl")
+write_xlsx(results_SDin,paste0("SD", params$file, ".xlsx"))
+
+```
+
