@@ -1,0 +1,266 @@
+---
+title: "MetaAnalysis"
+output:
+  html_document: 
+    toc: yes
+    number_sections: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(stringr)
+library(metafor)
+library(dplyr)
+library(tidyverse)
+library(readxl)
+```
+
+# Aggregate Results
+
+```{r}
+#create list with files from Kalokerinos Study
+kalok_files = paste0("Dataset ", 1:11, " public.csv.xlsx")
+
+# add Dataset 12  
+kalok_files <- append(kalok_files, "results_wd.xlsx" )
+
+#add Dataset 13
+kalok_files <-  append(kalok_files, "results_LS.xlsx")
+
+#read data
+K_data <- lapply(kalok_files, read_excel)
+
+
+# adding column with name of dataset
+for( i in 1:13){
+  
+  K_data[[i]]$Dataset <- NA
+}
+
+for( i in 1:13){
+  
+  K_data[[i]]$Dataset <- rep(i, 7)
+}
+
+K_data <-  bind_rows(K_data) 
+
+#add author names 
+
+K_data$Dataset[K_data$Dataset == 1] <- "Van Ryckeghem et al."
+K_data$Dataset[K_data$Dataset == 2] <- "Dejonckheere et al."
+K_data$Dataset[K_data$Dataset == 3] <- "Kalokerinos et al."
+K_data$Dataset[K_data$Dataset == 4] <- "Grommisch et al."
+K_data$Dataset[K_data$Dataset == 5] <- "Erbas et al."
+K_data$Dataset[K_data$Dataset == 6] <- "Brans et al."
+K_data$Dataset[K_data$Dataset == 7] <- "Holland et al."
+K_data$Dataset[K_data$Dataset == 8] <- "Koval et al."
+K_data$Dataset[K_data$Dataset == 9] <- "Koval et al."
+K_data$Dataset[K_data$Dataset == 10] <- "Dejonckheere et al."
+K_data$Dataset[K_data$Dataset == 11] <- "Kalokerinos et al."
+K_data$Dataset[K_data$Dataset == 12] <- "Denissen et al."
+K_data$Dataset[K_data$Dataset == 13] <- "Own diary data"
+
+
+K_data <-  bind_rows(K_data)
+```
+
+# Data Preparation
+
+```{r}
+### seperate columns in value, est.error and CI
+
+K_data <- K_data %>% 
+  tidyr::separate(negemo_b_neuro,                      
+                  c("neg_b_neuro", "est.error_n_b_neuro", "KIn_b_neuro"), sep = " ")
+
+K_data <-K_data %>% 
+  tidyr::separate(negemo_b_neuro_sigma,                      
+                  c("neg_b_neuro_sigma", "est.error_n_b_neuro_sigma", "KIn_b_neuro_sigma"), sep = " ")
+
+K_data <-K_data %>% 
+  tidyr::separate(posemo_b_neuro,                      
+                  c("pos_b_neuro", "est.error_p_b_neuro", "KIp_b_neuro"), sep = " ")
+
+K_data <-K_data %>% 
+  tidyr::separate(posemo_b_neuro_sigma,                      
+                  c("pos_b_neuro_sigma", "est.error_p_b_neuro_sigma", "KIp_b_neuro_sigma"), sep = " ")
+
+K_data <-K_data %>% 
+  tidyr::separate(b_neg_sigma_sex,                      
+                  c("b_neg_sigma_sex", "est.error_b_neg_sigma_sex", "KIb_neg_sigma_sex"), sep = " ")
+
+
+K_data <-K_data %>% 
+  tidyr::separate(b_pos_sigma_sex,                      
+                  c("b_pos_sigma_sex", "est.error_b_pos_sigma_sex", "KIb_pos_sigma_sex"), sep = " ")
+
+# save Table 
+library("writexl")
+
+write_xlsx(K_data,"~/new_results2.xlsx")
+
+## Filter Dataset for plots 
+K_b_sigma <- K_data %>% filter(model== "model3")
+K_RSD <- K_data %>% filter(model == "RSD")
+K_RSD_w <- K_data %>% filter(model == "RSD_weight")
+K_gender <- K_data %>% filter(model == "gender") 
+K_SD <- K_data %>% filter(model == "SD") 
+
+```
+
+# Plot Data 
+
+```{r}
+apatheme = theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        text=element_text(family='Arial'),
+        legend.title=element_blank(),
+        legend.position=c(.7,.8),
+        axis.line.x = element_line(color='black'),
+        axis.line.y = element_line(color='black'))
+```
+
+## BCLSM
+
+### Meta-Analysis b sigma negative
+
+```{r}
+# 1. b sigma 
+K_b_sigma$est.error_n_b_neuro_sigma <- as.numeric( K_b_sigma$est.error_n_b_neuro_sigma)
+K_b_sigma$neg_b_neuro_sigma <- as.numeric( K_b_sigma$neg_b_neuro_sigma)
+
+mod_b_sigma <-  rma(yi= neg_b_neuro_sigma, sei= est.error_n_b_neuro_sigma, data= K_b_sigma )  
+summary(mod_b_sigma)
+forest(mod_b_sigma, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13 "))) 
+par(bg="white")
+```
+
+### Meta-Analysis b sigma positive
+
+```{r}
+K_b_sigma$est.error_p_b_neuro_sigma <- as.numeric( K_b_sigma$est.error_p_b_neuro_sigma)
+K_b_sigma$pos_b_neuro_sigma <- as.numeric( K_b_sigma$pos_b_neuro_sigma)
+
+mod_b_sigma2 <-  rma(yi= pos_b_neuro_sigma, sei= est.error_p_b_neuro_sigma, data= K_b_sigma )  
+summary(mod_b_sigma2)
+
+pos_sigma <- forest(mod_b_sigma2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+                    xlim=c(-0.6,0.6), at=seq(-0.2,0.3,by=.1),
+                    mlab = (paste("Random Effects Model Study 1-13 "))) 
+pos_sigma
+```
+
+### Meta-Analysis b mean negative
+```{r}
+# b mean 
+
+K_b_sigma$est.error_n_b_neuro <- as.numeric( K_b_sigma$est.error_n_b_neuro)
+K_b_sigma$neg_b_neuro <- as.numeric( K_b_sigma$neg_b_neuro)
+
+mod_b <-  rma(yi= neg_b_neuro, sei= est.error_n_b_neuro, data= K_b_sigma )  
+forest(mod_b, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13 "))) 
+summary(mod_b)
+```
+
+### Meta-Analysis b mean positive
+
+```{r}
+K_b_sigma$est.error_p_b_neuro <- as.numeric( K_b_sigma$est.error_p_b_neuro)
+K_b_sigma$pos_b_neuro <- as.numeric( K_b_sigma$pos_b_neuro)
+
+mod_b2 <-  rma(yi= pos_b_neuro, sei= est.error_p_b_neuro, data= K_b_sigma )  
+forest(mod_b2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13 ")))   
+summary(mod_b2)
+
+```
+
+## RVI
+
+### Meta-Analysis unweighted RVI negative
+
+```{r}
+K_RSD$neg_b_neuro_sigma<- as.numeric( K_RSD$neg_b_neuro_sigma)
+K_RSD$est.error_n_b_neuro_sigma<- as.numeric( K_RSD$est.error_n_b_neuro_sigma)
+
+K_RSD$pos_b_neuro<- as.numeric( K_RSD$pos_b_neuro)
+K_RSD$est.error_p_b_neuro<- as.numeric( K_RSD$est.error_p_b_neuro)
+
+#negative
+mod_RSD <-  rma(yi= neg_b_neuro_sigma, vi= est.error_n_b_neuro_sigma, data= K_RSD )  
+summary(mod_RSD)
+forest(mod_RSD, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)),xlim = c(-1.68, 1.58), at=seq(-0.6,0.6,by=.2),
+       mlab = (paste("Random Effects Model Study 1-13 ")))
+```
+### Meta-Analysis unweighted RVI positive
+
+```{r}
+#positive
+mod_RSDp <-  rma(yi= pos_b_neuro, vi= est.error_p_b_neuro, data= K_RSD )  
+summary(mod_RSDp)
+forest(mod_RSDp, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13 ")))
+```
+
+## RVI with weights 
+
+### Meta-Analysis weighted RVI negative
+
+```{r}
+K_RSD_w$neg_b_neuro_sigma<- as.numeric( K_RSD_w$neg_b_neuro_sigma)
+K_RSD_w$est.error_n_b_neuro_sigma<- as.numeric( K_RSD_w$est.error_n_b_neuro_sigma)
+
+K_RSD_w$pos_b_neuro<- as.numeric( K_RSD_w$pos_b_neuro)                               
+K_RSD_w$est.error_p_b_neuro<- as.numeric( K_RSD_w$est.error_p_b_neuro)
+
+
+mod_RSD_w <-  rma(yi= neg_b_neuro_sigma, sei= est.error_n_b_neuro_sigma, data= K_RSD_w )  
+summary(mod_RSD_w)
+forest(mod_RSD_w, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)),xlim = c(-1.68, 1.58), at=seq(-0.6,0.6,by=.2),
+       mlab = (paste("Random Effects Model Study 1-13 ")))
+```
+
+### Meta-Analysis weighted RVI positive
+
+```{r}
+mod_RSD_w2 <-  rma(yi= pos_b_neuro, sei= est.error_p_b_neuro, data= K_RSD_w )  
+summary(mod_RSD_w2)
+forest(mod_RSD_w2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), xlim = c(-0.4, 0.31), at=seq(-0.15,0.15,by=.05),
+       mlab = (paste("Random Effects Model Study 1-13 ")))
+```
+
+## Gender Effects
+```{r}
+K_gender$neg_b_neuro <- as.numeric(K_gender$neg_b_neuro)
+K_gender$est.error_n_b_neuro <- as.numeric(K_gender$est.error_n_b_neuro)
+
+K_gender$neg_b_neuro_sigma <- as.numeric(K_gender$neg_b_neuro_sigma)
+K_gender$est.error_n_b_neuro_sigma <- as.numeric(K_gender$est.error_n_b_neuro_sigma)
+
+
+K_gender$b_neg_sigma_sex <- as.numeric(K_gender$b_neg_sigma_sex)
+K_gender$est.error_b_neg_sigma_sex <- as.numeric(K_gender$est.error_b_neg_sigma_sex)
+
+
+mod_sex1 <- rma(yi= b_neg_sigma_sex, sei= est.error_b_neg_sigma_sex, data= K_gender )
+forest(mod_sex1, slab =paste(K_b_sigma$Dataset))  
+
+mod_sex2 <- rma(yi= neg_b_neuro_sigma, sei= est.error_n_b_neuro_sigma, data= K_gender )
+summary(mod_sex2)
+forest(mod_sex2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13* "))) 
+mod_sex3 <- rma(yi= neg_b_neuro, sei= est.error_n_b_neuro, data= K_gender )
+forest(mod_sex3, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+       mlab = (paste("Random Effects Model Study 1-13 ")))  
+summary(mod_sex3)
+
+```
+
