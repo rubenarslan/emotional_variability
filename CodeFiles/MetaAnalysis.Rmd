@@ -8,9 +8,9 @@ editor_options:
   chunk_output_type: console
 ---
 
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-
 library(stringr)
 library(metafor)
 library(dplyr)
@@ -137,7 +137,7 @@ K_b_sigma$neg_b_neuro_sigma <- as.numeric( K_b_sigma$neg_b_neuro_sigma)
 
 mod_b_sigma <-  rma(yi= neg_b_neuro_sigma, sei= est.error_n_b_neuro_sigma, data= K_b_sigma )  
 summary(mod_b_sigma)
-forest(mod_b_sigma, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
+forest(mod_b_sigma, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)),                        
        mlab = (paste("Random Effects Model Study 1-13 "))) 
 par(bg="white")
 ```
@@ -158,6 +158,7 @@ pos_sigma
 ```
 
 ### Meta-Analysis b mean negative
+
 ```{r}
 # b mean 
 
@@ -200,6 +201,7 @@ summary(mod_RSD)
 forest(mod_RSD, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)),xlim = c(-1.68, 1.58), at=seq(-0.6,0.6,by=.2),
        mlab = (paste("Random Effects Model Study 1-13 ")))
 ```
+
 ### Meta-Analysis unweighted RVI positive
 
 ```{r}
@@ -238,6 +240,7 @@ forest(mod_RSD_w2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), xlim = c(-
 ```
 
 ## Gender Effects
+
 ```{r}
 K_gender$neg_b_neuro <- as.numeric(K_gender$neg_b_neuro)
 K_gender$est.error_n_b_neuro <- as.numeric(K_gender$est.error_n_b_neuro)
@@ -250,17 +253,352 @@ K_gender$b_neg_sigma_sex <- as.numeric(K_gender$b_neg_sigma_sex)
 K_gender$est.error_b_neg_sigma_sex <- as.numeric(K_gender$est.error_b_neg_sigma_sex)
 
 
-mod_sex1 <- rma(yi= b_neg_sigma_sex, sei= est.error_b_neg_sigma_sex, data= K_gender )
-forest(mod_sex1, slab =paste(K_b_sigma$Dataset))  
+
 
 mod_sex2 <- rma(yi= neg_b_neuro_sigma, sei= est.error_n_b_neuro_sigma, data= K_gender )
 summary(mod_sex2)
 forest(mod_sex2, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
-       mlab = (paste("Random Effects Model Study 1-13* "))) 
+       mlab = (paste("Random Effects Model Study 1-13* ")))
+```
+
+
+```{r}
 mod_sex3 <- rma(yi= neg_b_neuro, sei= est.error_n_b_neuro, data= K_gender )
 forest(mod_sex3, slab =c(paste0(1:13,".", " ", K_b_sigma$Dataset)), 
        mlab = (paste("Random Effects Model Study 1-13 ")))  
 summary(mod_sex3)
+
+```
+
+## Model comparison
+
+### censoring vs. no censoring 
+
+#### no censoring (negative Emotion)
+
+```{r include=FALSE}
+#read in new data files
+library(readxl)
+
+Dat1 <- read_excel("Dataset 1 public.csvCENS.xlsx")
+Dat2 <- read_excel("Dataset 2 public.csvCENS.xlsx")
+Dat3 <- read_excel("Dataset 3 public.csvCENS.xlsx")
+Dat4 <- read_excel("Dataset 4 public.csvCENS.xlsx")
+Dat5 <- read_excel("Dataset 5 public.csvCENS.xlsx")
+Dat6 <- read_excel("Dataset 6 public.csvCENS.xlsx")
+Dat7 <- read_excel("Dataset 7 public.csvCENS.xlsx")
+Dat8 <- read_excel("Dataset 8 public.csvCENS.xlsx")
+Dat9 <- read_excel("Dataset 9 public.csvCENS.xlsx")
+Dat10 <- read_excel("Dataset 10 public.csvCENS.xlsx")
+Dat11<- read_excel("Dataset 11 public.csvCENS.xlsx")
+Dat12 <- read_excel("results_wCENS.xlsx")
+Dat13 <- read_excel("results_LSCENS.xlsx")
+
+Censo <- full_join(x = Dat1, y = Dat2, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat3, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat4, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat5, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat6, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat7, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat8, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo <- full_join(x = Censo, y = Dat9, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+
+Censo$Dataset <- rep(1:9, each=2)
+
+Censo <- full_join(x = Censo, y = Dat10, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo$Dataset[19] <- "10"
+Censo$Dataset[20] <- "10"
+
+
+Censo <- full_join(x = Censo, y = Dat11, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo$Dataset[21] <- "11"
+Censo$Dataset[22] <- "11"
+
+Censo <- full_join(x = Censo, y = Dat12, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo$Dataset[23] <- "12"
+Censo$Dataset[24] <- "12"
+
+
+Censo <- full_join(x = Censo, y = Dat13, by= c("model","negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma","posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"))
+Censo$Dataset[25] <- "13"
+Censo$Dataset[26] <- "13"
+
+
+Censo$Study <- NULL
+Censo$negemo_sigma <- NULL
+Censo$posemo_sigma <- NULL
+
+Censo <- Censo %>% 
+  tidyr::separate(negemo_b_neuro_sigma,                      
+                  c("negemo_b_neuro_sigma", "est.error_b_neg_sigma", "KI_b_neg_sigma"), sep = " ")
+
+Censo <- Censo %>% 
+  tidyr::separate(negemo_b_neuro,                      
+                  c("negemo_b_neuro", "est.error_b_neg", "KI_b_neg"), sep = " ")
+
+write_xlsx(Censo,"~/Censo.xlsx")
+```
+
+
+```{r }
+noC <- Censo %>% filter(model== "modelnoCensoring")
+
+
+apatheme = theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        text=element_text(family='Arial'),
+        legend.title=element_blank(),
+        legend.position=c(.7,.8),
+        axis.line.x = element_line(color='black'),
+        axis.line.y = element_line(color='black'))
+
+names(noC)
+
+noC$negemo_b_neuro_sigma<- as.numeric(noC$negemo_b_neuro_sigma)
+noC$Dataset <- as.numeric(noC$Dataset)
+
+noC$est.error_b_neg_sigma <- as.numeric(noC$est.error_b_neg_sigma)
+
+noC$negemo_b_neuro<- as.numeric(noC$negemo_b_neuro)
+noC$Dataset <- as.numeric(noC$Dataset)
+
+noC$est.error_b_neg <- as.numeric(noC$est.error_b_neg)
+
+# b sigma without censoring 
+mod_b_sigma <-  rma(yi= negemo_b_neuro_sigma, sei= est.error_b_neg_sigma, data= noC )  
+summary(mod_b_sigma)
+forest(mod_b_sigma, slab =c(paste0("Study ", noC$Dataset)), 
+       mlab = (paste("RE Model Study 1-13 ")))
+```
+
+
+```{r }
+#b mean without censoring
+mod_b_mean <-  rma(yi= negemo_b_neuro, sei= est.error_b_neg, data= noC )  
+summary(mod_b_mean)
+forest(mod_b_mean, slab =c(paste0("Study ", noC$Dataset)), 
+       mlab = (paste("RE Model Study 1-13 "))) 
+
+```
+
+#### no censoring (positive Emotion) 
+
+```{r}
+CensoP <- Censo %>% 
+  tidyr::separate(posemo_b_neuro_sigma,                      
+                  c("pos_b_neuro_sigma", "est.error_b_pos_sigma", "KI_b_pos_sigma"), sep = " ")
+
+CensoP <- CensoP %>% 
+  tidyr::separate(posemo_b_neuro,                      
+                  c("pos_b_neuro", "est.error_b_pos", "KI_b_pos"), sep = " ")
+
+write_xlsx(CensoP,"~/CensoP.xlsx")
+
+
+noCp <- CensoP %>% filter(model== "modelnoCensoring")
+names(noCp)
+
+
+noCp$pos_b_neuro_sigma<- as.numeric(noCp$pos_b_neuro_sigma)
+noCp$Dataset <- as.numeric(noCp$Dataset)
+
+noCp$est.error_b_pos_sigma <- as.numeric(noCp$est.error_b_pos_sigma)
+
+#b sigma without censoring 
+mod_b_sigmaP <-  rma(yi= pos_b_neuro_sigma, sei= est.error_b_pos_sigma, data= noCp )  
+summary(mod_b_sigmaP)
+forest(mod_b_sigmaP, slab =c(paste0("Study ", noCp$Dataset)), 
+       mlab = (paste("RE Model Study 1-13 "))) 
+
+```
+
+### model C (two part)
+
+#### negative Emotion 
+
+```{r include=FALSE}
+#read in new data tables
+setwd("~/rstudio01/Neu")
+Dat1 <- read_excel("Dataset 1 public.csvjinxed.xlsx")
+Dat2 <- read_excel("Dataset 2 public.csvjinxed.xlsx")
+Dat3 <- read_excel("Dataset 3 public.csvjinxed.xlsx")
+Dat4 <- read_excel("Dataset 4 public.csvjinxed.xlsx")
+Dat5 <- read_excel("Dataset 5 public.csvjinxed.xlsx")
+Dat6 <- read_excel("Dataset 6 public.csvjinxed.xlsx")
+Dat7 <- read_excel("Dataset 7 public.csvjinxed.xlsx")
+Dat8 <- read_excel("Dataset 8 public.csvjinxed.xlsx")
+Dat9 <- read_excel("Dataset 9 public.csvjinxed.xlsx")
+Dat10 <- read_excel("Dataset 10 public.csvjinxed.xlsx")
+Dat11<- read_excel("Dataset 11 public.csvjinxed.xlsx")
+Dat12 <- read_excel("results_wquant.xlsx")
+Dat13 <- read_excel("results_LSquant.xlsx")
+
+quant <- full_join(x = Dat1, y = Dat2, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat3, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat4, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat5, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat6, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat7, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat8, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat9, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+
+quant$Study <- rep(1:9, each=2)
+quant <- full_join(x = quant, y = Dat10, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant$Study[19] <- "10"
+quant$Study[20] <- "10"
+
+
+quant <- full_join(x = quant, y = Dat11, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant$Study[21] <- "11"
+quant$Study[22] <- "11"
+quant <- full_join(x = quant, y = Dat12, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant <- full_join(x = quant, y = Dat13, by= c("model","negemo_b_neuro","negemo_b_neuro_sigma", "negemo_sigma"))
+quant$Study[23] <- "12"
+quant$Study[24] <- "12"
+quant$Study[25] <- "13"
+quant$Study[26] <- "13"
+
+quant <- quant %>% 
+  tidyr::separate(negemo_b_neuro,                      
+                  c("b_neuro", "est.error_b_neuro", "KI_b_neuro"), sep = " ")
+
+quant <- quant %>% 
+  tidyr::separate(negemo_b_neuro_sigma,                      
+                  c("b_neuro_sigma", "est.error_b_neuro_sigma", "KI_b_neuro_sigma"), sep = " ")
+
+write_xlsx(quant,"~/quant.xlsx")
+```
+
+
+```{r}
+#Exclude study 11 
+
+quant <- quant[-c(21:22),]
+
+apatheme = theme_bw() +
+  theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        panel.border = element_blank(),
+        text=element_text(family='Arial'),
+        legend.title=element_blank(),
+        legend.position=c(.7,.8),
+        axis.line.x = element_line(color='black'),
+        axis.line.y = element_line(color='black'))
+
+names(quant)
+
+quant$b_neuro_sigma <- as.numeric(quant$b_neuro_sigma)
+quant$Study <- as.numeric(quant$Study)
+
+quant$est.error_b_neuro_sigma <- as.numeric(quant$est.error_b_neuro_sigma)
+quant$b_neuro <- as.numeric(quant$b_neuro)
+quant$est.error_b_neuro <- as.numeric(quant$est.error_b_neuro)
+
+quant2 <- quant %>% filter(model== "BCSLM_q")
+
+
+#b sigma two part model C:
+mod_b_sigma <-  rma(yi= b_neuro_sigma, sei= est.error_b_neuro_sigma, data= quant2 )  
+summary(mod_b_sigma)
+forest(mod_b_sigma, slab =c(paste0("Study ", quant2$Study)), 
+       mlab = (paste("RE Model Study 1-13 ")))
+```
+
+
+```{r}
+#b mean two part model C:
+mod_b_mean <-  rma(yi= b_neuro, sei= est.error_b_neuro, data= quant2 )  
+summary(mod_b_mean)
+forest(mod_b_mean, slab =c(paste0("Study ", quant2$Study)), 
+       mlab = (paste("RE Model Study 1-13 "))) 
+
+```
+
+#### positive Emotion 
+
+```{r include=FALSE}
+library(readxl)
+
+Dat1 <- read_excel("Dataset 1 public.csvjinxedPO.xlsx")
+Dat2 <- read_excel("Dataset 2 public.csvjinxedPO.xlsx")
+Dat3 <- read_excel("Dataset 3 public.csvjinxedPO.xlsx")
+Dat4 <- read_excel("Dataset 4 public.csvjinxedPO.xlsx")
+Dat5 <- read_excel("Dataset 5 public.csvjinxedPO.xlsx")
+Dat6 <- read_excel("Dataset 6 public.csvjinxedPO.xlsx")
+Dat7 <- read_excel("Dataset 7 public.csvjinxedPO.xlsx")
+Dat8 <- read_excel("Dataset 8 public.csvjinxedPO.xlsx")
+Dat9 <- read_excel("Dataset 9 public.csvjinxedPO.xlsx")
+Dat10 <- read_excel("Dataset 10 public.csvjinxedPO.xlsx")
+Dat11<- read_excel("Dataset 11 public.csvjinxedPO.xlsx")
+Dat12 <- read_excel("results_wquantPO.xlsx")
+Dat13 <- read_excel("results_LSquantPO.xlsx")
+
+quant <- full_join(x = Dat1, y = Dat2, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat3, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat4, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat5, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat6, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat7, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat8, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat9, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+
+quant$Study <- rep(1:9, each=2)
+quant <- full_join(x = quant, y = Dat10, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant$Study[19] <- "10"
+quant$Study[20] <- "10"
+
+
+quant <- full_join(x = quant, y = Dat11, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant$Study[21] <- "11"
+quant$Study[22] <- "11"
+quant <- full_join(x = quant, y = Dat12, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant <- full_join(x = quant, y = Dat13, by= c("model","posemo_b_neuro","posemo_b_neuro_sigma", "posemo_sigma"))
+quant$Study[23] <- "12"
+quant$Study[24] <- "12"
+quant$Study[25] <- "13"
+quant$Study[26] <- "13"
+
+names(quant)
+quant <- quant %>% 
+  tidyr::separate(posemo_b_neuro,                      
+                  c("b_neuro", "est.error_b_neuro", "KI_b_neuro"), sep = " ")
+
+quant <- quant %>% 
+  tidyr::separate(posemo_b_neuro_sigma,                      
+                  c("b_neuro_sigma", "est.error_b_neuro_sigma", "KI_b_neuro_sigma"), sep = " ")
+```
+
+```{r}
+#exclude study 2 and 3
+quant <- quant[-c(3:6),]
+
+quant$b_neuro_sigma <- as.numeric(quant$b_neuro_sigma)
+quant$Study <- as.numeric(quant$Study)
+
+quant$est.error_b_neuro_sigma <- as.numeric(quant$est.error_b_neuro_sigma)
+quant$b_neuro <- as.numeric(quant$b_neuro)
+quant$est.error_b_neuro <- as.numeric(quant$est.error_b_neuro)
+
+quant2 <- quant %>% filter(model== "BCSLM_q")
+
+#b sigma two part model C:
+mod_b_sigma <-  rma(yi= b_neuro_sigma, sei= est.error_b_neuro_sigma, data= quant2 )  
+summary(mod_b_sigma)
+forest(mod_b_sigma, slab =c(paste0("Study ", quant2$Study)), 
+       mlab = (paste("RE Model Study 1-13 ")))
+```
+
+
+```{r}
+#b mean two part model C:
+mod_b_mean <-  rma(yi= b_neuro, sei= est.error_b_neuro, data= quant2 )  
+summary(mod_b_mean)
+forest(mod_b_mean, slab =c(paste0("Study ", quant2$Study)), 
+       mlab = (paste("RE Model Study 1-13 "))) 
 
 ```
 

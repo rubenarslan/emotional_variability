@@ -22,9 +22,10 @@ library(ggdist )
 library(relativeVariability)
 library(brms)
 library(cmdstanr)
+library(knitr)
+library(rstan)
+library(shinystan)
 
-getwd()
-setwd("/home/sc.uni-leipzig.de/no628luhi")
 #run parallel cores 
 options(mc.cores =8, brms.backend = "cmdstanr", brms.file_refit = "on_change")
 check_cmdstan_toolchain()
@@ -33,6 +34,7 @@ set_cmdstan_path()
 
 cmdstan_path()
 ```
+
 # Simulate Data
 
 Create a sample with neuroticism scores (normal distributed)
@@ -230,22 +232,9 @@ model 1: naiv: only associations with the mean, normal distribution assumption
 model 2: associations with the mean, censored
 model 3: association with mean and variability, censored
 
-## Simulation 1 (effect on mean)
+## Simulation 1 (effect on mean) BCLSM
 
 ```{r message=TRUE, warning=TRUE}
-
-w1model_neuro <- brm(Affect_m ~ neurot_m + (1|id), data = diary1,
-                   file = "w1model_neuro")
-print(w1model_neuro)
-plot(w1model_neuro)
-
-
-w1model_neuro2 <- brm(Affect_m | cens(Acens) ~ neurot_m + (1|id), data = diary1,
-                  file = "w1model_neuro2")
-#print(w1model_neuro2)
-#plot(w1model_neuro2)
-
-
 w1model_neuro3 <- brm(bf(Affect_m | cens(Acens) ~ neurot_m + (1|id),
                        sigma ~ neurot_m + (1|id)), data = diary1,
                     iter = 6000, warmup = 2000, init = 0.1,
@@ -254,49 +243,11 @@ w1model_neuro3 <- brm(bf(Affect_m | cens(Acens) ~ neurot_m + (1|id),
 
 print(w1model_neuro3)
 plot(w1model_neuro3)
-
- 
 ```
 
-#loo model 1 comparison
-
-```{r message=TRUE, warning=TRUE}
-w1model_neuro <- add_criterion(w1model_neuro, "loo")
-w1model_neuro2 <- add_criterion(w1model_neuro2, "loo")
-w1model_neuro3 <- add_criterion(w1model_neuro3, "loo")
-w1model_neuro5 <- add_criterion(w1model_neuro5, "loo")
 
 
-loo1 <- loo_compare(w1model_neuro,w1model_neuro2, w1model_neuro3, criterion = "loo")
-
-
-loo1 <- as.data.frame(loo)
-
-loo1$Dataset <- "Simulation1"
-loo1 <- tibble::rownames_to_column(loo1, "model")
-library("writexl")
-write_xlsx(loo,"looW1")
-
-```
-
-## Simulation 2 (effect on  SD) 
-
-```{r message=TRUE, warning=TRUE}
-w2model_neuro <- brm(Affect_m ~ neurot_m + (1|id), data = diary2,
-                   control = list(adapt_delta = .95),
-                    iter = 2000, warmup = 1000,
-                   file = "w2model_neuro")
-print(w2model_neuro)
-plot(w2model_neuro)
-
-
-w2model_neuro2 <- brm(Affect_m | cens(Acens) ~ neurot_m + (1|id), data = diary2,
-                    control = list(adapt_delta = .99),
-                    iter = 5000, warmup = 2000,init = 0.1,
-                   file = "w2model_neuro2")
-print(w2model_neuro2)
-plot(w2model_neuro2)
-```
+## Simulation 2 (effect on  SD) BCLSM
 
 
 ```{r message=TRUE, warning=TRUE}
@@ -307,46 +258,9 @@ w2model_neuro3 <- brm(bf(Affect_m | cens(Acens) ~ neurot_m + (1|id),
                    file = "w2model_neuro3")
 print(w2model_neuro3)
 plot(w2model_neuro3)
-
 ```
 
-#loo model 2 comparison
-
-```{r message=TRUE, warning=TRUE}
-w2model_neuro <- add_criterion(w2model_neuro, "loo")
-w2model_neuro2 <- add_criterion(w2model_neuro2, "loo")
-w2model_neuro3 <- add_criterion(w2model_neuro3, "loo")
-
-
-loo2 <- loo_compare(w2model_neuro,w2model_neuro2,w2model_neuro3, criterion = "loo")
-
-loo2 <- as.data.frame(loo2)
-
-loo2$Dataset <- "World2"
-loo2 <- tibble::rownames_to_column(loo2, "model")
-library("writexl")
-write_xlsx(loo2,"looW2.xlsx")
-
-```
-
-## Simulation 3 (effects on both)
-
-
-```{r message=TRUE, warning=TRUE}
-w3model_neuro <- brm(Affect_m ~ neurot_m + (1|id), data = diary3,
-                      iter = 5000, warmup = 2000,
-                      file = "w3model_neuro")
-#print(w3model_neuro)
-#plot(w3model_neuro)
-
-
-w3model_neuro2 <- brm(Affect_m | cens(Acens) ~ neurot_m + (1|id), data = diary3,
-                    control = list(adapt_delta = .99),inits = 0.1 ,  
-                    iter = 5000, warmup = 2000,
-                   file = "w3model_neuro2")
-#print(w3model_neuro2)
-#plot(w3model_neuro2)
-```
+## Simulation 3 (effects on both) BCLSM
 
 
 ```{r message=TRUE, warning=TRUE}
@@ -357,33 +271,8 @@ w3model_neuro3 <- brm(bf(Affect_m| cens(Acens)  ~ neurot_m + (1|id),
                    file = "w3model_neuro3")
 print(w3model_neuro3)
 plot(w3model_neuro3)
-
-
-
 ```
 
-#loo model 3 comparison
-
-```{r message=TRUE, warning=TRUE}
-w3model_neuro <- add_criterion(w3model_neuro, "loo")
-w3model_neuro2 <- add_criterion(w3model_neuro2, "loo")
-w3model_neuro3 <- add_criterion(w3model_neuro3, "loo")
-
-
-
-loo3 <- loo_compare(w3model_neuro,w3model_neuro2, w3model_neuro3, criterion = "loo")
-
-
-loo3 <- as.data.frame(loo3)
-
-loo3$Dataset <- "Welt3"
-loo3 <- tibble::rownames_to_column(loo3, "model")
-library("writexl")
-write_xlsx(loo3,"looW3")
-
-```
-
-# Results 
 
 ```{r}
 extract_param2 <- function(model, parameter) {
@@ -392,69 +281,39 @@ extract_param2 <- function(model, parameter) {
   est
 }
 
-results_sim <- data.frame(matrix(nrow = 7, # Modelle & RVI 
-                             ncol = 9+1)) # 3 Wahre Welten a 3 Spalten 
+results_sim <- data.frame(matrix(nrow = 8, 
+                             ncol = 9+1))  
 names(results_sim) <- c("model", "w1_b_neuro", "w1_b_neuro_sigma", "w1_sigma",
                     "w2_b_neuro", "w2_b_neuro_sigma", "w2_sigma",
                     "w3_b_neuro", "w3_b_neuro_sigma", "w3_sigma"
                     )
 
-results_sim$model <- c("model1", "model2", "model3",
-                  "RVI", "RVI_weight", "SD", "SD*")
+results_sim$model <- c("model1", "model2", "BCLSM",
+                  "RVI", "RVI_weight", "SD", "SD*", "BLSM")
 
 
-
-```
-
-
-```{r}
-
-results_sim[1, "w1_b_neuro"] <- extract_param2(w1model_neuro, "b_neurot_m")
-results_sim[1, "w1_sigma"] <- extract_param2(w1model_neuro, "sigma")
-
-results_sim[2, "w1_b_neuro"] <- extract_param2(w1model_neuro2, "b_neurot_m")
-results_sim[2, "w1_sigma"] <- extract_param2(w1model_neuro2, "sigma")
 ```
 
 
 ```{r}
 results_sim[3, "w1_b_neuro"] <- extract_param2(w1model_neuro3, "b_neurot_m")
 results_sim[3, "w1_b_neuro_sigma"] <- extract_param2(w1model_neuro3, "b_sigma_neurot_m")
-results_sim[3, "w1_sigma"] <- extract_param2(w1model_neuro3, "Intercept_sigma")
-```
-
-
-```{r}
-#World2
-results_sim[1, "w2_b_neuro"] <- extract_param2(w2model_neuro, "b_neurot_m")
-results_sim[1, "w2_sigma"] <- extract_param2(w2model_neuro, "sigma")
-
-results_sim[2, "w2_b_neuro"] <- extract_param2(w2model_neuro2, "b_neurot_m")
-results_sim[2, "w2_sigma"] <- extract_param2(w2model_neuro2, "sigma")
+results_sim[3, "w1_sigma"] <- extract_param2(w1model_neuro3, "b_sigma_Intercept")
 ```
 
 
 ```{r}
 results_sim[3, "w2_b_neuro"] <- extract_param2(w2model_neuro3, "b_neurot_m")
 results_sim[3, "w2_b_neuro_sigma"] <- extract_param2(w2model_neuro3, "b_sigma_neurot_m")
-results_sim[3, "w2_sigma"] <- extract_param2(w2model_neuro3, "Intercept_sigma")
+results_sim[3, "w2_sigma"] <- extract_param2(w2model_neuro3, "b_sigma_Intercept")
+
+
 ```
-
-
-```{r}
-results_sim[1, "w3_b_neuro"] <- extract_param2(w3model_neuro, "b_neurot_m")
-results_sim[1, "w3_sigma"] <- extract_param2(w3model_neuro, "sigma")
-
-results_sim[2, "w3_b_neuro"] <- extract_param2(w3model_neuro2, "b_neurot_m")
-results_sim[2, "w3_sigma"] <- extract_param2(w3model_neuro2, "sigma")
-```
-
 
 ```{r}
 results_sim[3, "w3_b_neuro"] <- extract_param2(w3model_neuro3, "b_neurot_m")
 results_sim[3, "w3_b_neuro_sigma"] <- extract_param2(w3model_neuro3, "b_sigma_neurot_m")
-results_sim[3, "w3_sigma"] <- extract_param2(w3model_neuro3, "Intercept_sigma")
-
+results_sim[3, "w3_sigma"] <- extract_param2(w3model_neuro3, "b_sigma_Intercept")
 ```
 
 # RVI (Relative-Variability-Index) 
@@ -481,7 +340,8 @@ for (i in 1:nrow(id)) {
 
 people$logrsd_d1 <- log(people$RSD_d1)
 
-m_rsd_d1 <- brm(logrsd_d1 ~ neurot, data= people)
+m_rsd_d1 <- brm(logrsd_d1 ~ neurot, data= people,
+                file="simneg1_logrsd_uw")
 print(m_rsd_d1, digits=4)
 
 
@@ -501,7 +361,8 @@ for (i in 1:nrow(id)) {
 people$logrsd_d2 <- log(people$RSD_d2)
 
 
-m_rsd_d2 <- brm( logrsd_d2~ neurot, data= people)
+m_rsd_d2 <- brm( logrsd_d2~ neurot, data= people,
+                 file="simneg2_logrsd_uw")
 m_rsd_d2
 results_sim[4,6] <- extract_param2(m_rsd_d2, "b_neurot")
 
@@ -518,7 +379,8 @@ people$logrsd_d3 <- log(people$RSD_d3)
 
 
 
-m_rsd_d3 <- brm(logrsd_d3 ~ neurot, data= people)
+m_rsd_d3 <- brm(logrsd_d3 ~ neurot, data= people,
+                file="simneg3_logrsd_uw")
 m_rsd_d3
 results_sim[4,9] <- extract_param2(m_rsd_d3, "b_neurot")
 
@@ -527,7 +389,6 @@ results_sim[4,9] <- extract_param2(m_rsd_d3, "b_neurot")
 
 ## weighted RVI for all three Simulations 
  
-
 ```{r}
 people$mean_Aff_d1 <- NA
 for (i in 1:nrow(id)) {
@@ -606,15 +467,18 @@ for (i in 1:nrow(id)) {
 
 
 ```{r}
-m_rsd_d1_w <- brm(logrsd_d1| weights(weight_d1) ~ neurot, data= people)
+m_rsd_d1_w <- brm(logrsd_d1| weights(weight_d1) ~ neurot, data= people,
+                  file="simneg1_logrsd_w")
 m_rsd_d1_w
 results_sim[5,3] <- extract_param2(m_rsd_d1_w, "b_neurot")
 
-m_rsd_d2_w <- brm(logrsd_d2| weights(weight_d2) ~ neurot, data= people)
+m_rsd_d2_w <- brm(logrsd_d2| weights(weight_d2) ~ neurot, data= people,
+                  file="simneg2_logrsd_w")
 m_rsd_d2_w
 results_sim[5,6] <- extract_param2(m_rsd_d2_w, "b_neurot")
 
-m_rsd_d3_w <- brm(logrsd_d3| weights(weight_d3) ~ neurot, data= people)
+m_rsd_d3_w <- brm(logrsd_d3| weights(weight_d3) ~ neurot, data= people,
+                  file="simneg3_logrsd_w")
 m_rsd_d3_w
 results_sim[5,9] <- extract_param2(m_rsd_d3_w, "b_neurot")
 ```
@@ -667,16 +531,19 @@ mean(people$sd_Aff_d3, na.rm = T)
 
 ```{r}
 
-m_sd_d1 <- brm(logsd_d1 ~ neurot, data= people)
+m_sd_d1 <- brm(logsd_d1 ~ neurot, data= people,
+               file="simneg1_logsd")
 m_sd_d1
 results_sim[6,3] <- extract_param2(m_sd_d1, "b_neurot")
 
 
-m_sd_d2 <- brm(logsd_d2 ~ neurot, data= people)
+m_sd_d2 <- brm(logsd_d2 ~ neurot, data= people,
+               file="simneg2_logsd")
 m_sd_d2
 results_sim[6,6] <- extract_param2(m_sd_d2, "b_neurot")
 
-m_sd_d3 <- brm(logsd_d3 ~ neurot, data= people)
+m_sd_d3 <- brm(logsd_d3 ~ neurot, data= people,
+               file="simneg3_logsd")
 m_sd_d3
 results_sim[6,9] <- extract_param2(m_sd_d3, "b_neurot")
 
@@ -686,58 +553,90 @@ results_sim[6,9] <- extract_param2(m_sd_d3, "b_neurot")
 
 ```{r}
 
-m_sd_d1c <- brm(logsd_d1 ~ neurot + mean_Aff_d1, data= people)
+m_sd_d1c <- brm(logsd_d1 ~ neurot + mean_Aff_d1, data= people,
+                file="simneg1_logsd_m")
 m_sd_d1c
 results_sim[7,3] <- extract_param2(m_sd_d1c, "b_neurot")
 
 
-m_sd_d2c <- brm(logsd_d2 ~ neurot + mean_Aff_d2, data= people)
+m_sd_d2c <- brm(logsd_d2 ~ neurot + mean_Aff_d2, data= people,
+                file="simneg2_logsd_m")
 m_sd_d2c
 results_sim[7,6] <- extract_param2(m_sd_d2c, "b_neurot")
 
-m_sd_d3c <- brm(logsd_d3 ~ neurot + mean_Aff_d3, data= people)
+m_sd_d3c <- brm(logsd_d3 ~ neurot + mean_Aff_d3, data= people,
+                 file="simneg3_logsd_m")
 m_sd_d3c
 results_sim[7,9] <- extract_param2(m_sd_d3c, "b_neurot")
 
 ```
-# Results
 
-```{r}
-results_simW13 <- results_sim
+# BLSM without Censoring 
 
-library("writexl")
-write_xlsx(results_sim,"~/results_sim.xlsx")
+## Simulation 1 BLSM 
+
+```{r message=TRUE, warning=TRUE}
+
+people_1 <- people[order(people$mean_Aff_d1),]
+people_1e <- people_1[-c(1:10),]
+high_1 <- diary1[(diary1$id %in% people_1e$id),]
+
+w1model_neuro4b <- brm(bf(Affect_m  ~ neurot_m + (1|id),
+                       sigma ~ neurot_m + (1|id)), data = high_1,
+                       control = list(adapt_delta = .99999),chains = 4,
+                        iter = 7000, warmup = 2000, init = 0.1,
+                    file = "w1model_neuro4b")
+
+
+
+print(w1model_neuro4b)
+plot(w1model_neuro4b)
 ```
 
-#Correlations 
+## Simulation 2 BLSM
 
-```{r}
-sd1 <- cor.test(people$neurot, people$sd_Aff_d1)
-sd2 <- cor.test(people$neurot, people$sd_Aff_d2)
-sd3 <- cor.test(people$neurot, people$sd_Aff_d3)
+```{r message=TRUE, warning=TRUE}
+people_2 <- people[order(people$mean_Aff_d2),]
+people_2e <- people_2[-c(1:10),]
+high_2 <- diary2[(diary2$id %in% people_2e$id),]
 
-rsd1 <- cor.test(people$neurot, people$RSD_d1)
-rsd2 <- cor.test(people$neurot, people$RSD_d2)
-rsd3 <- cor.test(people$neurot, people$RSD_d3)
+w2model_neuro4b <- brm(bf(Affect_m  ~ neurot_m + (1|id),
+                    sigma ~ neurot_m + (1|id)), data = high_2,
+                    control = list(adapt_delta = .9999),chains = 4,
+                    iter = 6000, warmup = 2000, init = 0.1,
+                   file = "w2model_neuro4b")
+print(w2model_neuro4b)
 
-
-tab1 <- data.frame(matrix(nrow = 3, # Modelle & RVI 
-                             ncol = 3)) # 3 Wahre Welten a 3 Spalten 
-names(tab1) <- c("Neuroticism", "SD", "RSD")
-
-tab1$Neuroticism <- c("Affect1", "Affect2", "Affect3")
-
-tab1[1,2] <- sd1$estimate
-tab1[2,2] <- sd2$estimate
-tab1[3,2] <- sd3$estimate
-
-tab1[1,3] <- rsd1$estimate
-tab1[2,3] <- rsd2$estimate
-tab1[3,3] <- rsd3$estimate
-
-library("writexl")
-write_xlsx(tab1,"~/Simulation_correlation.xlsx")
 ```
 
+## Simulation 3 BLSM
 
+```{r message=TRUE, warning=TRUE}
+people_3 <- people[order(people$mean_Aff_d3),]
+people_3e <- people_3[-c(1:10),]
+high_3 <- diary3[(diary3$id %in% people_3e$id),]
+
+w3model_neuro4b <- brm(bf(Affect_m  ~ neurot_m + (1|id),
+                       sigma ~ neurot_m + (1|id)), data = high_3,
+                      iter = 7000, warmup = 2000,chains = 4,
+                    control = list(adapt_delta = .9999), inits = 0.1 ,        #options = list(adapt_delta = 0.99)
+                   file = "w3model_neuro4b")
+print(w3model_neuro4b)
+plot(w3model_neuro4b)
+
+```
+
+```{r}
+results_sim[8, "w1_b_neuro"] <- extract_param2(w1model_neuro4b, "b_neurot_m")
+results_sim[8, "w1_b_neuro_sigma"] <- extract_param2(w1model_neuro4b, "b_sigma_neurot_m")
+results_sim[8, "w1_sigma"] <- extract_param2(w1model_neuro4b, "b_sigma_Intercept")
+
+results_sim[8, "w2_b_neuro"] <- extract_param2(w2model_neuro4b, "b_neurot_m")
+results_sim[8, "w2_b_neuro_sigma"] <- extract_param2(w2model_neuro4b, "b_sigma_neurot_m")
+results_sim[8, "w2_sigma"] <- extract_param2(w2model_neuro4b, "b_sigma_Intercept")
+
+results_sim[8, "w3_b_neuro"] <- extract_param2(w3model_neuro4b, "b_neurot_m")
+results_sim[8, "w3_b_neuro_sigma"] <- extract_param2(w3model_neuro4b, "b_sigma_neurot_m")
+results_sim[8, "w3_sigma"] <- extract_param2(w3model_neuro4b, "b_sigma_Intercept")
+```
 

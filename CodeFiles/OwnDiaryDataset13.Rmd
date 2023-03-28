@@ -1,0 +1,684 @@
+---
+title: "Dataset 13"
+author: 
+output:
+  html_document: 
+    toc: yes
+    number_sections: yes
+---
+
+```{r, include=FALSE }
+library(psych)
+library(relativeVariability)
+library(brms)
+library(cmdstanr)
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(remotes)
+library(loo)
+library(knitr)
+library(rstan)
+library(shinystan)
+
+options(mc.cores = 8, brms.backend = "cmdstanr", brms.file_refit = "on_change")
+
+
+Daily <- read.csv("~/rstudio01/Neu/MA/Daily.csv", header=TRUE)
+Start <- read.csv("~/rstudio01/Neu/MA/Start.csv", header=TRUE)
+
+items_pa <- c("PA_S_1", "PA_S_2", "PA_S_3")
+items_na <- c("NA_S_1", "NA_S_2", "NA_S_3", "NA_S_4", "NA_S_5")
+
+#Aggregate 
+Daily$pa <- rowMeans(Daily[, items_pa])
+Daily$na <- rowMeans(Daily[, items_na])
+
+mean(Daily$na, na.rm=T)
+mean(Daily$pa, na.rm=T)
+range(Daily$pa, na.rm=T)
+qplot(Daily$pa, binwidth = 0.1)
+
+#Neuroticism
+Start$BFI_NEU_1 <- NA
+Start$BFI_NEU_1 <- 5 + 1 - Start$BFI_NEU_1_R
+Start$BFI_NEU_1_R <- NULL
+
+Start$BFI_NEU_2 <- 5 + 1 - Start$BFI_NEU_2_R 
+Start$BFI_NEU_2_R <- NULL
+
+Start$BFI_NEU_3 <- 5 + 1 - Start$BFI_NEU_3_R
+Start$BFI_NEU_3_R <- NULL
+
+# BFI Data to calculate neuroticism score
+
+BFI_NEU <- data.frame(session = Start$session,
+                      BFI_NEU_1 = Start$BFI_NEU_1,
+                      BFI_NEU_2 = Start$BFI_NEU_2,
+                      BFI_NEU_3 = Start$BFI_NEU_3,
+                      BFI_NEU_4 = Start$BFI_NEU_4,
+                      BFI_NEU_5 = Start$BFI_NEU_5,
+                      BFI_NEU_6 = Start$BFI_NEU_6)
+
+# Check for neuroticism
+mean(BFI_NEU$session == Start$session)
+
+# BFI_NEU
+describe(BFI_NEU[, -1])
+psych::alpha(BFI_NEU[, -1]) 
+
+#Neuroticism score
+
+BFI_NEU$BFI_NEU <- rowMeans(BFI_NEU[, -1]) 
+
+# bind to Start
+Start$Neurot <- BFI_NEU$BFI_NEU
+
+#bind to daily
+daily <- merge(Daily, BFI_NEU, all.x = T, by= "session")
+
+daily <- daily %>% group_by(session) %>% filter(n()>= 5) %>% ungroup()
+
+daily$neurot <- daily$BFI_NEU
+```
+
+# Data Preparation
+
+#Plot Affect
+
+```{r}
+ggplot(daily, aes(na)) +
+  geom_histogram(binwidth = 0.1) + 
+  ggtitle("Distribution of Negative Emotion Study 13") +
+  xlab("Negative Emotion") + ylab("Frequency") + 
+  scale_x_continuous(breaks = seq(1, 5, 1)) +
+  scale_y_continuous(breaks = seq(0, 1000, 200)) +
+  theme(text = element_text(size = 10, family = "Times New Roman"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black")) +
+  coord_cartesian(xlim = c(1, 5), ylim = c(0, 1000))
+
+ggsave("NAS13.png", width = 4, height = 3)
+
+
+ggplot(daily, aes(pa)) +
+  geom_histogram(binwidth = 0.1) + 
+  ggtitle("Distribution of Positive Emotion Study 13") +
+  xlab("Positive Emotion") + ylab("Frequency") + 
+  scale_x_continuous(breaks = seq(1, 5, 1)) +
+  scale_y_continuous(breaks = seq(0, 1500, 200)) +
+  theme(text = element_text(size = 10, family = "Times New Roman"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.background = element_blank(),
+        axis.line = element_line(colour = "black")) +
+  coord_cartesian(xlim = c(1, 5), ylim = c(0, 1200))
+
+ggsave("PAS13.png", width = 4, height = 3)
+```
+
+## Censoring 
+
+```{r}
+daily$Acens <- case_when(daily$na == 1 ~ "left",
+                         daily$na == 5 ~ "right",
+                         TRUE ~ "none")
+table(daily$Acens)
+
+daily$Acensp <- case_when(daily$pa == 1 ~ "left",
+                         daily$pa == 5 ~ "right",
+                         TRUE ~ "none")
+table(daily$Acensp)
+```
+
+# BCLSM Negative Emotion
+
+```{r message=TRUE, warning=TRUE}
+na_model_neuro3 <- brm(bf(na | cens(Acens) ~ neurot + (1|session),
+                       sigma ~ neurot + (1|session)), data = daily,
+                       iter = 7000, warmup = 2000,chains = 8, init = 0.1,
+                      control = list(adapt_delta = .99),
+                   file = "na_model_neuro3")
+print(na_model_neuro3)
+plot(na_model_neuro3)
+prior_summary(na_model_neuro3)
+
+
+```
+
+## Model comparison 
+### scale vs. no scale parameter
+
+```{r}
+
+na_model_neuro2 <- brm(na | cens(Acens) ~ neurot + (1|session), data = daily,
+                    iter = 3000, warmup = 1000, chains = 8,
+                   file = "na_model_neuro2")
+print(na_model_neuro2)
+plot(na_model_neuro2)
+```
+
+```{r message=TRUE, warning=TRUE}
+modelA <- na_model_neuro2
+modelB <- na_model_neuro3
+
+modelA <- add_criterion(modelA, "loo")
+modelB <- add_criterion(modelB, "loo")
+
+loo <- loo_compare(modelA,modelB, criterion = "loo")
+
+loo <- as.data.frame(loo)
+
+loo$Dataset <- "13"
+loo <- tibble::rownames_to_column(loo, "model")
+
+library("writexl")
+write_xlsx(loo,"~/looDataset13.xlsx")
+kable(loo)
+
+```
+
+### censoring vs. no censoring 
+
+```{r}
+na_model_neuro4 <- brm(bf(na  ~ neurot + (1|session),
+                       sigma ~ neurot + (1|session)), data = daily,
+                       iter = 7000, warmup = 2000,chains = 4, init = 0.1,
+                      control = list(adapt_delta = .99),
+                   file = "na_model_neuro4")
+
+print(na_model_neuro4)
+```
+
+```{r}
+extract_param <- function(model, parameter) {
+  ci <- posterior_summary(model, variable = parameter)
+  est <- sprintf("%.2f %.2f [%.2f;%.2f]", ci[,"Estimate"],ci[,"Est.Error"], ci[,"Q2.5"], ci[,"Q97.5"])
+  est
+}
+
+results_LScens <- data.frame(matrix(nrow = 2, # Modelle & RVI 
+                             ncol = 6+1)) # 2 Affekte a 3 Spalten 
+names(results_LScens) <- c("model", "negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma",
+                    "posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma"
+                    )
+
+results_LScens$model <- c("modelCensoring", "modelnoCensoring")
+
+#NA
+
+results_LScens[1, "negemo_b_neuro"] <- extract_param(na_model_neuro3, "b_neurot")
+results_LScens[1, "negemo_b_neuro_sigma"] <- extract_param(na_model_neuro3, "b_sigma_neurot")
+results_LScens[1, "negemo_sigma"] <- extract_param(na_model_neuro3, "b_sigma_Intercept")
+
+results_LScens[2, "negemo_b_neuro"] <- extract_param(na_model_neuro4, "b_neurot")
+results_LScens[2, "negemo_b_neuro_sigma"] <- extract_param(na_model_neuro4, "b_sigma_neurot")
+results_LScens[2, "negemo_sigma"] <- extract_param(na_model_neuro4, "b_sigma_Intercept")
+
+```
+
+### BCLSM vs. model C (two-part model)
+
+```{r}
+daily <- daily %>% left_join(daily %>% distinct(session, neurot) %>% mutate(neuro_Q =Hmisc::cut2(neurot, g = 4)), by = c("session", "neurot"))
+
+
+na_model_neuro_jinxed <- brm(bf(na | cens(Acens) ~ neurot + (1|gr(session, by = neuro_Q)),
+     sigma ~ neurot + (1|session)), data = daily,
+  iter = 5000, warmup = 2000,  chains = 4,
+  control = list(adapt_delta = .95), init = 0.1,
+                   file = "na_model_neuro3_jinxed")
+
+
+print(na_model_neuro_jinxed)
+
+```
+
+```{r}
+
+modelA <- na_model_neuro3
+modelB <- na_model_neuro_jinxed
+
+modelA <- add_criterion(modelA, "loo")
+modelB <- add_criterion(modelB, "loo")
+
+loo_c <- loo_compare(modelA,modelB, criterion = "loo")
+
+loo_c <- as.data.frame(loo)
+
+loo_c$Dataset <- "13"
+#loo_c <- tibble::rownames_to_column(loo, "model")
+library("writexl")
+write_xlsx(loo_c,"~/Study13loojinxed.xlsx")
+
+kable(loo_c)
+```
+
+## control for gender
+
+```{r}
+table(Start$sex)
+
+#1=female, 2=male, 3=diverse 
+gender <- select(Start, session, sex)
+
+# bins sex  to daily 
+daily2 <- merge(daily, gender, all.x = T, by= "session")
+
+daily2$sex <- as.numeric(daily2$sex)
+
+## not enough diverse people to compare them (excluded from model) 
+daily2$sex[daily2$sex == 3] <- NA
+daily2$sex[daily2$sex == 2] <- 0
+
+
+daily2$sex <- as.factor(daily2$sex)
+
+table(daily2$sex, exclude = NULL)
+```
+
+
+```{r}
+m3n_gender <- brm(bf(na | cens(Acens) ~ neurot+ sex + (1|session),
+                       sigma ~ neurot+sex + (1|session)), data = daily2,
+                       iter = 5000, warmup = 2000,chains = 4,
+                      control = list(adapt_delta = .95), inits = 0.1,                
+                  file = "m3n_gender")
+print(m3n_gender)
+```
+
+
+# BCLSM Positive Emotion
+
+```{r message=TRUE, warning=TRUE}
+
+
+pa_model_neuro3 <- brm(bf(pa | cens(Acensp) ~ neurot + (1|session),
+                       sigma ~ neurot + (1|session)), data = daily,
+                        control = list(adapt_delta = .99),chains = 8,
+                       iter = 5000, warmup = 2000,
+                   file = "pa_model_neuro3")
+print(pa_model_neuro3)
+plot(pa_model_neuro3)
+prior_summary(pa_model_neuro3)
+
+pp_check(pa_model_neuro3)
+
+```
+
+## Model comparison 
+### scale vs. no scale parameter
+
+```{r}
+pa_model_neuro2 <- brm(pa | cens(Acensp) ~ neurot + (1|session), data = daily,
+                    iter = 4000, warmup = 1000, chains = 8,
+                   file = "pa_model_neuro2")
+print(pa_model_neuro2)
+plot(pa_model_neuro2)
+```
+
+```{r}
+modelAp <- pa_model_neuro2
+modelBp <- pa_model_neuro3
+
+
+modelAp <- add_criterion(modelAp, "loo")
+modelBp <- add_criterion(modelBp, "loo")
+
+looP <- loo_compare(modelAp,modelBp, criterion = "loo")
+
+looP <- as.data.frame(looP)
+
+looP$Dataset <- "13"
+#looP <- tibble::rownames_to_column(looP, "model")
+library("writexl")
+write_xlsx(looP,"~/looPDataset13.xlsx")
+
+kable(looP)
+```
+
+### censoring vs. no censoring 
+
+```{r}
+pa_model_neuro4 <- brm(bf(pa  ~ neurot + (1|session),
+                       sigma ~ neurot + (1|session)), data = daily,
+                        control = list(adapt_delta = .99),chains = 4,
+                       iter = 5000, warmup = 2000,
+                   file = "pa_model_neuro4")
+print(pa_model_neuro4)
+```
+
+```{r}
+results_LScens[1, "posemo_b_neuro"] <- extract_param(pa_model_neuro3, "b_neurot")
+results_LScens[1, "posemo_b_neuro_sigma"] <- extract_param(pa_model_neuro3, "b_sigma_neurot")
+results_LScens[1, "posemo_sigma"] <- extract_param(pa_model_neuro3, "b_sigma_Intercept")
+
+
+results_LScens[2, "posemo_b_neuro"] <- extract_param(pa_model_neuro4, "b_neurot")
+results_LScens[2, "posemo_b_neuro_sigma"] <- extract_param(pa_model_neuro4, "b_sigma_neurot")
+results_LScens[2, "posemo_sigma"] <- extract_param(pa_model_neuro4, "b_sigma_Intercept")
+
+
+library("writexl")
+write_xlsx(results_LScens,"~/results_LSCENS.xlsx")
+```
+
+### BCLSM vs. model C (two-part model)
+
+
+```{r}
+pa_model_neuro_jinxed <- brm(bf(pa | cens(Acens) ~ neurot + (1|gr(session, by = neuro_Q)),
+     sigma ~ neurot + (1|session)), data = daily,
+  iter = 5000, warmup = 2000,  chains = 4,
+  control = list(adapt_delta = .95), init = 0.1,
+                   file = "pa_model_neuro3_jinxed")
+
+
+print(pa_model_neuro_jinxed)
+```
+
+```{r message=TRUE, warning=TRUE}
+
+modelA <- pa_model_neuro3
+modelB <- pa_model_neuro_jinxed
+
+modelA <- add_criterion(modelA, "loo")
+modelB <- add_criterion(modelB, "loo")
+
+loo_cP <- loo_compare(modelA,modelB, criterion = "loo")
+
+loo_cP <- as.data.frame(loo)
+
+loo_cP$Dataset <- "13"
+#loo_cP <- tibble::rownames_to_column(loo_cP, "model")
+
+library("writexl")
+write_xlsx(loo_cP,"~/Study13POloojinxed.xlsx")
+
+kable(loo_cP)
+```
+
+```{r}
+extract_param <- function(model, parameter) {
+  ci <- posterior_summary(model, variable = parameter)
+  est <- sprintf("%.2f %.2f [%.2f;%.2f]", ci[,"Estimate"],ci[,"Est.Error"], ci[,"Q2.5"], ci[,"Q97.5"])
+  est
+}
+
+results_LS <- data.frame(matrix(nrow = 7, # Modelle & RVI 
+                             ncol = 8+1)) # 2 Affekte a 3 Spalten 
+names(results_LS) <-c("model", "negemo_b_neuro", "negemo_b_neuro_sigma", "negemo_sigma", "b_neg_sigma_sex",
+                    "posemo_b_neuro", "posemo_b_neuro_sigma", "posemo_sigma", "b_pos_sigma_sex"
+                    )
+
+results_LS$model <- c("model1", "model2", "model3",
+                  "RSD", "RSD_weight", "SD", "gender")
+
+#NA
+results_LS[2, "negemo_b_neuro"] <- extract_param(na_model_neuro2, "b_neurot")
+results_LS[2, "negemo_sigma"] <- extract_param(na_model_neuro2, "sigma")
+
+results_LS[3, "negemo_b_neuro"] <- extract_param(na_model_neuro3, "b_neurot")
+results_LS[3, "negemo_b_neuro_sigma"] <- extract_param(na_model_neuro3, "b_sigma_neurot")
+results_LS[3, "negemo_sigma"] <- extract_param(na_model_neuro3, "b_sigma_Intercept")
+
+
+#pa
+results_LS[2, "posemo_b_neuro"] <- extract_param(pa_model_neuro2, "b_neurot")
+results_LS[2, "posemo_sigma"] <- extract_param(pa_model_neuro2, "sigma")
+
+results_LS[3, "posemo_b_neuro"] <- extract_param(pa_model_neuro3, "b_neurot")
+results_LS[3, "posemo_b_neuro_sigma"] <- extract_param(pa_model_neuro3, "b_sigma_neurot")
+results_LS[3, "posemo_sigma"] <- extract_param(pa_model_neuro3, "b_sigma_Intercept")
+
+#gender
+results_LS[7, "negemo_b_neuro"] <- extract_param(m3n_gender, "b_neurot")
+results_LS[7, "negemo_b_neuro_sigma"] <- extract_param(m3n_gender, "b_sigma_neurot")
+results_LS[7, "negemo_sigma"] <- extract_param(m3n_gender, "b_sigma_Intercept")
+results_LS[7, "b_neg_sigma_sex"] <- extract_param(m3n_gender, "b_sigma_sex1")
+
+```
+
+# RVI (Relative-Variability-Index)
+## Unweighted RVI
+
+```{r message=TRUE, warning=TRUE}
+#id <- unique(daily$session)
+#id <- as.data.frame(id)
+
+Start$RSD_NA <- NA
+for (i in 1:nrow(Start)) {
+  # aktuelle Zeilennummer
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$na[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$RSD_NA[i] <- relativeSD(Daily$na[Daily$session == Start$session[i]],
+                                     1, 5)
+    }
+  } 
+}
+
+
+Start$logrsd_n <- log(Start$RSD_NA)
+m_rsd_na <- brm(logrsd_n ~ Neurot, data= Start,
+                file = "na_logrsd_uw")
+print(m_rsd_na)
+
+results_LS[4,3] <- extract_param(m_rsd_na, "b_Neurot")
+
+
+Start$RSD_PA <- NA
+for (i in 1:nrow(Start)) {
+  # aktuelle Zeilennummer
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$pa[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$RSD_PA[i] <- relativeSD(Daily$pa[Daily$session == Start$session[i]],
+                                     1, 5)
+    }
+  } 
+}
+
+Start$RSD_PA[Start$RSD_PA == 0] <- NA     # sonst log(0) = - Inf
+
+Start$logrsd_p <- log(Start$RSD_PA)
+range(Start$logrsd_p, na.rm = T)
+
+m_rsd_pa <- brm(logrsd_p ~ Neurot, data= Start,
+                file = "pa_logrsd_uw")
+print(m_rsd_pa)
+
+results_LS[4,6] <- extract_param(m_rsd_pa, "b_Neurot")
+
+```
+
+## Weighted RVI 
+
+```{r message=TRUE, warning=TRUE}
+Start$mean_NA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$na[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$mean_NA[i] <- mean(Daily$na[Daily$session == Start$session[i]],
+                                   na.rm = T)
+    }
+  } 
+}
+
+
+Start$mean_PA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$pa[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$mean_PA[i] <- mean(Daily$pa[Daily$session == Start$session[i]],
+                                   na.rm = T)
+    }
+  } 
+}
+```
+
+
+```{r message=TRUE, warning=TRUE}
+
+Start$weight_NA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+  
+    
+    if (!is.na(Start$mean_NA[i])) {
+      # If mean is not missing
+      Start$weight_NA[i] <- maximumSD(Start$mean_NA[i], # mean
+                                       1,  # min
+                                       5,  # max
+                                       sum(!is.na(Daily$na[Daily$session == Start$session[i]])) 
+      ) 
+      # W as reported in paper
+      Start$weight_NA[i] <- Start$weight_NA[i]^2
+    }
+  }
+}
+
+m_rsd_na_w <- brm(logrsd_n| weights(weight_NA) ~ Neurot, data= Start,
+                  file = "na_logrsd_w")
+print(m_rsd_na_w)
+results_LS[5,3] <- extract_param(m_rsd_na_w, "b_Neurot")
+
+
+
+Start$weight_PA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+  
+    
+    if (!is.na(Start$mean_PA[i])) {
+      Start$weight_PA[i] <- maximumSD(Start$mean_PA[i],
+                                       1,  
+                                       5,  
+                                       sum(!is.na(Daily$pa[Daily$session == Start$session[i]])) 
+      ) 
+      Start$weight_PA[i] <- Start$weight_PA[i]^2
+    }
+  }
+}
+
+m_rsd_Pa_w <- brm(logrsd_p| weights(weight_PA) ~ Neurot, data= Start,
+                  file = "pa_logrsd_w")
+print(m_rsd_Pa_w)
+results_LS[5,6] <- extract_param(m_rsd_Pa_w, "b_Neurot")
+
+```
+
+# SD 
+
+```{r}
+Start$sd_NA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$na[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$sd_NA[i] <- sd(Daily$na[Daily$session == Start$session[i]],
+                                   na.rm = T)
+    }
+  }
+}
+
+Start$sd_PA <- NA
+for (i in 1:nrow(Start)) {
+  if (Start$session[i] %in% Daily$session) {
+    if (
+      sum(!is.na(Daily$pa[Daily$session == Start$session[i]])) >= 5
+    ) { 
+      Start$sd_PA[i] <- sd(Daily$pa[Daily$session == Start$session[i]],
+                                   na.rm = T)
+    }
+  }
+}
+
+
+mean(Start$sd_NA, na.rm = T)
+mean(Start$sd_PA, na.rm= T)
+
+Start$sd_PA[Start$sd_PA == 0] <- NA   
+
+Start$logsd_NA <- log(Start$sd_NA)
+Start$logsd_PA <- log(Start$sd_PA)
+
+m_sd_na <- brm(logsd_NA ~ Neurot, data= Start,
+               file = "na_logsd")
+m_sd_na
+results_LS[6,3] <- extract_param(m_sd_na, "b_Neurot")
+
+m_sd_pa <- brm(logsd_PA ~ Neurot, data= Start,
+               file = "pa_logsd")
+m_sd_pa
+results_LS[6,6] <- extract_param(m_sd_pa, "b_Neurot")
+
+```
+
+
+
+# Incremental Validity of SD 
+
+```{r message=F, warning=F, silent=2}
+na_noneurot <- brm(bf(na | cens(Acens) ~  (1|session),
+                       sigma ~  (1|session)), data = daily,
+                       iter = 7000, warmup = 2000,chains = 4,
+                      control = list(adapt_delta = .99), init = 0.1,
+                      file = "na_noneurot13")
+
+print(na_noneurot)
+
+rans <- coef(na_noneurot, summary = T)
+
+rans_i <- as.data.frame(rans$session[,,"Intercept"]) %>% tibble::rownames_to_column("session")
+rans_s <- as.data.frame(rans$session[,,"sigma_Intercept"]) %>% tibble::rownames_to_column("session")
+nrow(rans_s)
+nrow(rans_i)
+nrow(Start)
+dat <- merge(rans_s, rans_i, all = T, by= "session")
+dat <- merge(dat, Start, all = T, by= "session")
+names(dat)[2] <- "Est.SD"
+names(dat)[6] <- "Est.M"
+
+fit1 <- lm(Neurot ~ Est.SD + Est.M , data=dat)
+summary(fit1)
+
+fit1.2 <- lm(Neurot ~  Est.M , data=dat)
+summary(fit1.2)
+
+aov <- anova(fit1.2, fit1)
+aov
+
+summary(fit1)$r.squared-summary(fit1.2)$r.squared
+
+results_SDin <- data.frame(matrix(nrow = 1, ncol = 9))
+names(results_SDin) <- c("Dataset","b_SD","Err.SD","p(b_SD)","b_M","Err.M","p(b_M)","ΔR²", "p")
+
+results_SDin$Dataset <- "13"
+
+results_SDin$`ΔR²` <- summary(fit1)$r.squared-summary(fit1.2)$r.squared
+results_SDin$`p` <- aov$`Pr(>F)`[2]
+results_SDin$Err.SD <- summary(fit1)$coefficients[2,2]
+results_SDin$b_SD <- fit1$coefficients[2]
+
+results_SDin$`p(b_SD)` <- summary(fit1)$coefficients[2,4]
+results_SDin$b_M <- fit1$coefficients[3]
+results_SDin$`p(b_M)` <- summary(fit1)$coefficients[3,4]
+results_SDin$Err.M <- summary(fit1)$coefficients[3,2]
+
+
+
+library("writexl")
+write_xlsx(results_SDin,"~/results_SD13.xlsx")
+
+```
+
